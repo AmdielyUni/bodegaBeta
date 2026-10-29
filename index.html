@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Versión beta del Sistema de Gestión de Inventario y Bodega (SGIB): pedidos, recepción, punto de venta y kárdex.">
+<title>SGIB Bodega Beta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: barra de marca + pestañas por tarea; cada vista = una tarea del usuario (IUX). */
+:root {
+  --bg: #eef2f1;
+  --surface: #ffffff;
+  --surface-2: #f6f8f7;
+  --ink: #142120;
+  --muted: #566664;
+  --line: #d3dcda;
+  --accent: #0d5f67;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcecec;
+  --good: #1d7346; --good-soft: #e1f2e8;
+  --warn: #9a5800; --warn-soft: #fbefdc;
+  --bad: #b0261d;  --bad-soft: #fbe5e3;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1514; --surface: #162120; --surface-2: #1b2827; --ink: #e4ecea; --muted: #95a6a3; --line: #2b3a38;
+    --accent: #4fb2ba; --accent-ink: #061314; --accent-soft: #173a3d;
+    --good: #63c58e; --good-soft: #15301f; --warn: #e3a447; --warn-soft: #33260f; --bad: #f2786e; --bad-soft: #3a1714;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1514; --surface: #162120; --surface-2: #1b2827; --ink: #e4ecea; --muted: #95a6a3; --line: #2b3a38;
+  --accent: #4fb2ba; --accent-ink: #061314; --accent-soft: #173a3d;
+  --good: #63c58e; --good-soft: #15301f; --warn: #e3a447; --warn-soft: #33260f; --bad: #f2786e; --bad-soft: #3a1714;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.brand { background: var(--surface); border-bottom: 1px solid var(--line); }
+header.brand .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-block: 14px; }
+.logo { display: flex; align-items: baseline; gap: 10px; }
+.logo b { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: 0.02em; }
+.logo span { color: var(--muted); font-size: 13px; }
+.tag { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.spacer { flex: 1; }
+nav.tabs { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+nav.tabs .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs a { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: var(--muted); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; min-height: 44px; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.count { font-family: var(--font-mono); font-size: 11.5px; background: var(--bad-soft); color: var(--bad); border-radius: 999px; padding: 1px 7px; }
+main { padding-block: 24px 48px; }
+h1 { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin: 0 0 4px; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+.lead { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 0; }
+.stack { display: grid; gap: 16px; }
+.grid2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.tile .v { font-family: var(--font-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.tile.alert .v { color: var(--bad); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13.5px; cursor: pointer; min-height: 36px; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+input, select { font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 40px; min-width: 0; }
+input[type="number"] { font-family: var(--font-mono); width: 96px; text-align: right; }
+input.bad { border-color: var(--bad); background: var(--bad-soft); }
+label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.row > label.f { flex: 1 1 160px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.ghost { background: transparent; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.code { font-family: var(--font-mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--good-soft); color: var(--good); }
+.pill.low { background: var(--warn-soft); color: var(--warn); }
+.pill.out { background: var(--bad-soft); color: var(--bad); }
+.pill.info { background: var(--accent-soft); color: var(--accent); }
+.pill.neutral { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.in { color: var(--good); } .out { color: var(--bad); }
+.msg { border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.msg.err { background: var(--bad-soft); color: var(--bad); }
+.msg.okm { background: var(--good-soft); color: var(--good); }
+.msg.warnm { background: var(--warn-soft); color: var(--warn); }
+.msg ul { margin: 4px 0 0; padding-left: 18px; }
+.empty { color: var(--muted); padding: 18px 0; }
+.hits { display: grid; gap: 6px; max-height: 340px; overflow-y: auto; margin-top: 10px; }
+.hit { display: flex; justify-content: space-between; gap: 10px; align-items: center; text-align: left; width: 100%; background: var(--surface-2); }
+.hit .meta { font-size: 12.5px; color: var(--muted); }
+.totals { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; margin-top: 14px; font-variant-numeric: tabular-nums; }
+.totals .n { font-family: var(--font-mono); text-align: right; }
+.totals .grand { font-weight: 700; font-size: 18px; padding-top: 6px; border-top: 1px solid var(--line); }
+.doc { background: var(--surface-2); border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; }
+.doc h3 { margin: 0 0 6px; font-family: var(--font-mono); font-size: 15px; }
+.confirm { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
+.note { font-size: 13px; color: var(--muted); }
+.lines { display: grid; gap: 8px; }
+.line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.line select { flex: 1 1 180px; }
+@media (prefers-reduced-motion: no-preference) { .msg, .doc { animation: rise .25s ease-out; } @keyframes rise { from { transform: translateY(4px); } to { transform: none; } } }
+
+/* Reset base */
+html { color-scheme: light; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="brand">
+  <div class="wrap">
+    <div class="logo"><b>SGIB</b><span>Sistema de Gestión de Inventario y Bodega</span></div>
+    <span class="tag">Versión beta 0.9 · datos de ejemplo</span>
+    <span class="spacer"></span>
+    <button class="ghost small" id="btn-reset" type="button">Restablecer datos de ejemplo</button>
+  </div>
+</header>
+<nav class="tabs" aria-label="Secciones">
+  <div class="wrap" id="tabs">
+    <a href="#inventario" data-v="inventario">Inventario <span class="count" id="nav-alertas" hidden></span></a>
+    <a href="#pedidos" data-v="pedidos">Pedidos de compra</a>
+    <a href="#recepcion" data-v="recepcion">Recepción (entrada)</a>
+    <a href="#ventas" data-v="ventas">Punto de venta (salida)</a>
+    <a href="#kardex" data-v="kardex">Kárdex</a>
+    <a href="#pruebas" data-v="pruebas">Pruebas</a>
+  </div>
+</nav>
+<main><div class="wrap" id="view"></div></main>
+
+<script src="inventario.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { Bodega } = window.SGIB;
+  const KEY = 'sgib-beta-v1';
+  const $ = s => document.querySelector(s);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+  const num = new Intl.NumberFormat('es-CO');
+  const fecha = iso => new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  const ESTADOS = { PENDIENTE: ['Pendiente', 'neutral'], DESPACHADO: ['Despachado', 'info'], RECIBIDO_PARCIAL: ['Recibido parcial', 'low'], RECIBIDO: ['Recibido', 'ok'] };
+
+  // ---------- Datos de ejemplo ----------
+  function semilla() {
+    const b = new Bodega({
+      categorias: [{ id: 'ABA', nombre: 'Abarrotes' }, { id: 'ASE', nombre: 'Aseo' }, { id: 'BEB', nombre: 'Bebidas' }, { id: 'FER', nombre: 'Ferretería' }],
+      proveedores: [
+        { nit: '900123456-1', nombre: 'Distribuidora Andina S.A.S.', telefono: '602 731 4400' },
+        { nit: '901234567-8', nombre: 'Aseo Total del Sur Ltda.', telefono: '602 722 1188' },
+        { nit: '800987654-3', nombre: 'Ferretería Mayorista del Pacífico S.A.S.', telefono: '602 736 9020' }
+      ],
+      productos: [
+        { codigo: 'A001', nombre: 'Arroz blanco 500 g', categoriaId: 'ABA', ubicacion: 'E1-N2', costo: 2500, precioVenta: 3200, stock: 53, stockMinimo: 10 },
+        { codigo: 'A002', nombre: 'Aceite vegetal 1 L', categoriaId: 'ABA', ubicacion: 'E1-N3', costo: 9000, precioVenta: 11500, stock: 12, stockMinimo: 10 },
+        { codigo: 'A003', nombre: 'Azúcar 1 kg', categoriaId: 'ABA', ubicacion: 'E1-N4', costo: 3600, precioVenta: 4500, stock: 40, stockMinimo: 15 },
+        { codigo: 'A004', nombre: 'Panela 500 g', categoriaId: 'ABA', ubicacion: 'E1-N1', costo: 2200, precioVenta: 2900, stock: 8, stockMinimo: 10 },
+        { codigo: 'L001', nombre: 'Detergente en polvo 1 kg', categoriaId: 'ASE', ubicacion: 'E3-N1', costo: 7000, precioVenta: 9800, stock: 30, stockMinimo: 5 },
+        { codigo: 'L002', nombre: 'Jabón de loza 500 g', categoriaId: 'ASE', ubicacion: 'E3-N2', costo: 3900, precioVenta: 5200, stock: 0, stockMinimo: 6 },
+        { codigo: 'L003', nombre: 'Blanqueador 1 L', categoriaId: 'ASE', ubicacion: 'E3-N3', costo: 2700, precioVenta: 3800, stock: 22, stockMinimo: 8 },
+        { codigo: 'B001', nombre: 'Agua sin gas 600 ml', categoriaId: 'BEB', ubicacion: 'E2-N1', costo: 900, precioVenta: 1500, stock: 102, stockMinimo: 24 },
+        { codigo: 'B002', nombre: 'Gaseosa 1,5 L', categoriaId: 'BEB', ubicacion: 'E2-N2', costo: 3400, precioVenta: 4800, stock: 36, stockMinimo: 12 },
+        { codigo: 'F001', nombre: 'Tornillo drywall 1" caja x100', categoriaId: 'FER', ubicacion: 'E4-N1', costo: 6500, precioVenta: 9000, stock: 4, stockMinimo: 5 },
+        { codigo: 'F002', nombre: 'Cinta aislante 18 m', categoriaId: 'FER', ubicacion: 'E4-N2', costo: 1800, precioVenta: 3000, stock: 25, stockMinimo: 10 }
+      ]
+    });
+    b.productos.forEach(p => { if (p.stock > 0) b.registrarMovimiento('ENTRADA', p, p.stock, 'INV-INICIAL', 'jefe.bodega'); });
+    const p1 = b.crearPedido('800987654-3', [{ codigo: 'F001', cantidad: 10, costoUnitario: 6400 }]).pedido;
+    b.registrarDespacho(p1.numero, 'REM-0912');
+    b.registrarEntrada(p1.numero, [{ codigo: 'F001', cantidad: 10 }], 'aux.bodega');
+    const p2 = b.crearPedido('900123456-1', [{ codigo: 'A004', cantidad: 30, costoUnitario: 2150 }, { codigo: 'A002', cantidad: 24, costoUnitario: 8800 }]).pedido;
+    b.registrarDespacho(p2.numero, 'REM-4471');
+    b.crearPedido('901234567-8', [{ codigo: 'L002', cantidad: 36, costoUnitario: 3800 }, { codigo: 'L003', cantidad: 12, costoUnitario: 2650 }]);
+    b.registrarSalida({ cliente: { documento: '1085234567', nombre: 'Tienda La Esquina' }, items: [{ codigo: 'A001', cantidad: 3 }, { codigo: 'B001', cantidad: 6 }] }, 'vendedor');
+    return b;
+  }
+
+  let bd;
+  try { const raw = localStorage.getItem(KEY); bd = raw ? new Bodega(JSON.parse(raw)) : semilla(); } catch (e) { bd = semilla(); }
+  const guardar = () => { try { localStorage.setItem(KEY, JSON.stringify(bd)); } catch (e) { /* sin almacenamiento: la sesión sigue en memoria */ } };
+
+  // ---------- Estado de interfaz ----------
+  const ui = {
+    cat: 'TODAS', q: '',
+    pedidoLineas: [{ codigo: '', cantidad: 1, costo: '' }], pedidoProv: '', pedidoMsg: null,
+    despachoRem: {},
+    recPedido: null, recCant: {}, recConfirm: false, recMsg: null,
+    carrito: [], cliDoc: '', cliNom: '', busca: '', ventaConfirm: false, ventaMsg: null,
+    kxProd: 'TODOS', pruebas: null
+  };
+
+  const estadoStock = p => p.stock === 0 ? ['Agotado', 'out'] : p.stock <= p.stockMinimo ? ['Bajo mínimo', 'low'] : ['Normal', 'ok'];
+  const nombreCat = id => (bd.categorias.find(c => c.id === id) || {}).nombre || id;
+  const nombreProv = nit => (bd.proveedores.find(p => p.nit === nit) || {}).nombre || nit;
+
+  // ---------- Vistas ----------
+  function vInventario() {
+    const alertas = bd.alertasStock();
+    const unidades = bd.productos.reduce((s, p) => s + p.stock, 0);
+    const valor = bd.productos.reduce((s, p) => s + p.stock * p.costo, 0);
+    const q = ui.q.trim().toLowerCase();
+    const lista = bd.productos.filter(p => (ui.cat === 'TODAS' || p.categoriaId === ui.cat) && (!q || p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)));
+    return `
+      <h1>Inventario de bodega</h1>
+      <p class="lead">Existencias por categoría con su ubicación (estante-nivel). El estado se recalcula con cada entrada y salida.</p>
+      <div class="tiles">
+        <div class="tile"><div class="k">Productos</div><div class="v">${num.format(bd.productos.length)}</div></div>
+        <div class="tile"><div class="k">Unidades</div><div class="v">${num.format(unidades)}</div></div>
+        <div class="tile"><div class="k">Valor al costo</div><div class="v">${cop.format(valor)}</div></div>
+        <div class="tile ${alertas.length ? 'alert' : ''}"><div class="k">Por reponer</div><div class="v">${alertas.length}</div></div>
+      </div>
+      ${alertas.length ? `<div class="msg warnm" style="margin-bottom:16px"><b>Reposición sugerida:</b> ${alertas.map(p => `${esc(p.nombre)} (${p.stock} de mínimo ${p.stockMinimo})`).join(' · ')}</div>` : ''}
+      <div class="panel">
+        <div class="toolbar">
+          <button class="chip" data-cat="TODAS" aria-pressed="${ui.cat === 'TODAS'}">Todas</button>
+          ${bd.categorias.map(c => `<button class="chip" data-cat="${c.id}" aria-pressed="${ui.cat === c.id}">${esc(c.nombre)} <span class="code">${bd.productosPorCategoria(c.id).length}</span></button>`).join('')}
+          <span class="spacer"></span>
+          <input id="inv-q" type="search" placeholder="Buscar por código o nombre" value="${esc(ui.q)}" aria-label="Buscar producto">
+        </div>
+        <div class="tbl"><table>
+          <thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Ubicación</th><th class="n">Stock</th><th class="n">Mínimo</th><th class="n">Costo prom.</th><th class="n">Precio venta</th><th>Estado</th></tr></thead>
+          <tbody>${lista.map(p => { const [t, c] = estadoStock(p); return `<tr><td class="code">${p.codigo}</td><td>${esc(p.nombre)}</td><td>${esc(nombreCat(p.categoriaId))}</td><td class="code">${esc(p.ubicacion)}</td><td class="n">${num.format(p.stock)}</td><td class="n">${p.stockMinimo}</td><td class="n">${cop.format(p.costo)}</td><td class="n">${cop.format(p.precioVenta)}</td><td><span class="pill ${c}">${t}</span></td></tr>`; }).join('') || `<tr><td colspan="9" class="empty">No hay productos que coincidan con la búsqueda.</td></tr>`}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  function vPedidos() {
+    const opsProd = sel => `<option value="">Producto…</option>` + bd.productos.map(p => `<option value="${p.codigo}" ${sel === p.codigo ? 'selected' : ''}>${p.codigo} · ${esc(p.nombre)}</option>`).join('');
+    const pedidos = [...bd.pedidos].reverse();
+    return `
+      <h1>Pedidos de compra</h1>
+      <p class="lead">Compras crea el pedido; cuando el proveedor despacha, se registra la remisión y el pedido queda listo para recibir en bodega.</p>
+      <div class="grid2">
+        <div class="panel">
+          <h2>Pedidos</h2>
+          <div class="tbl"><table>
+            <thead><tr><th>N.º</th><th>Proveedor</th><th class="n">Líneas</th><th class="n">Valor</th><th>Estado</th><th>Acción</th></tr></thead>
+            <tbody>${pedidos.map(p => {
+              const [t, c] = ESTADOS[p.estado];
+              const valor = p.items.reduce((s, i) => s + i.cantidadPedida * i.costoUnitario, 0);
+              let acc = '';
+              if (p.estado === 'PENDIENTE') acc = `<div class="line"><input id="rem-${p.numero}" placeholder="Remisión" value="${esc(ui.despachoRem[p.numero] || '')}" style="width:120px" aria-label="Número de remisión"><button class="small" data-despachar="${p.numero}">Registrar despacho</button></div>`;
+              else if (p.estado === 'DESPACHADO' || p.estado === 'RECIBIDO_PARCIAL') acc = `<button class="small primary" data-recibir="${p.numero}">Recibir en bodega</button>`;
+              else acc = `<span class="note">Cerrado</span>`;
+              return `<tr><td class="code">${p.numero}${p.remision ? `<div class="note">${esc(p.remision)}</div>` : ''}</td><td>${esc(nombreProv(p.proveedorNit))}</td><td class="n">${p.items.length}</td><td class="n">${cop.format(valor)}</td><td><span class="pill ${c}">${t}</span></td><td>${acc}</td></tr>`;
+            }).join('')}</tbody>
+          </table></div>
+        </div>
+        <div class="panel">
+          <h2>Nuevo pedido</h2>
+          <div class="stack">
+            <label class="f">Proveedor
+              <select id="ped-prov"><option value="">Seleccione…</option>${bd.proveedores.map(p => `<option value="${p.nit}" ${ui.pedidoProv === p.nit ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
+            </label>
+            <div class="lines">
+              ${ui.pedidoLineas.map((l, i) => `<div class="line">
+                <select data-pl="${i}" data-k="codigo" aria-label="Producto">${opsProd(l.codigo)}</select>
+                <input type="number" min="1" data-pl="${i}" data-k="cantidad" value="${esc(l.cantidad)}" aria-label="Cantidad" title="Cantidad">
+                <input type="number" min="1" data-pl="${i}" data-k="costo" value="${esc(l.costo)}" placeholder="Costo" aria-label="Costo unitario" title="Costo unitario (COP)" style="width:110px">
+                ${ui.pedidoLineas.length > 1 ? `<button class="small ghost" data-quitar-pl="${i}" aria-label="Quitar línea">Quitar</button>` : ''}
+              </div>`).join('')}
+            </div>
+            <div class="row"><button class="small" id="ped-add" type="button">Agregar línea</button><span class="spacer"></span><button class="primary" id="ped-crear" type="button">Crear pedido</button></div>
+            ${ui.pedidoMsg ? `<div class="msg ${ui.pedidoMsg.ok ? 'okm' : 'err'}">${esc(ui.pedidoMsg.text)}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function validarRecepcion(p) {
+    const errs = {};
+    p.items.forEach(i => {
+      const pend = i.cantidadPedida - i.cantidadRecibida;
+      const v = ui.recCant[i.codigo];
+      if (v === '' || v === undefined) return;
+      const n = Number(v);
+      if (!(n >= 0) || !Number.isInteger(n)) errs[i.codigo] = 'Cantidad inválida';
+      else if (n > pend) errs[i.codigo] = `Máximo ${pend}`;
+    });
+    return errs;
+  }
+
+  function vRecepcion() {
+    const recibibles = bd.pedidos.filter(p => p.estado === 'DESPACHADO' || p.estado === 'RECIBIDO_PARCIAL');
+    if (ui.recPedido && !recibibles.some(p => p.numero === ui.recPedido)) ui.recPedido = null;
+    if (!ui.recPedido && recibibles.length) selPedido(recibibles[0].numero);
+    const p = ui.recPedido ? bd.buscarPedido(ui.recPedido) : null;
+    let cuerpo = '';
+    if (!p) {
+      cuerpo = `<div class="panel"><p class="empty">No hay pedidos despachados por recibir. Registre un despacho en Pedidos de compra.</p></div>`;
+    } else {
+      const errs = validarRecepcion(p);
+      const lineas = p.items.map(i => ({ i, pend: i.cantidadPedida - i.cantidadRecibida, prod: bd.buscarProducto(i.codigo) }));
+      const aRecibir = lineas.filter(l => Number(ui.recCant[l.i.codigo]) > 0);
+      const valido = aRecibir.length > 0 && Object.keys(errs).length === 0;
+      cuerpo = `
+        <div class="panel stack">
+          <div class="row" style="align-items:center"><div><h2 style="margin:0">${p.numero} · ${esc(nombreProv(p.proveedorNit))}</h2><div class="note">Remisión ${esc(p.remision || 'sin número')} · ${fecha(p.fecha)}</div></div><span class="spacer"></span><span class="pill ${ESTADOS[p.estado][1]}">${ESTADOS[p.estado][0]}</span></div>
+          <div class="tbl"><table>
+            <thead><tr><th>Producto</th><th>Ubicación</th><th class="n">Pedido</th><th class="n">Recibido</th><th class="n">Pendiente</th><th class="n">Recibe ahora</th></tr></thead>
+            <tbody>${lineas.map(({ i, pend, prod }) => `<tr><td><span class="code">${i.codigo}</span> ${esc(prod.nombre)}</td><td class="code">${esc(prod.ubicacion)}</td><td class="n">${i.cantidadPedida}</td><td class="n">${i.cantidadRecibida}</td><td class="n">${pend}</td>
+              <td class="n">${pend > 0 ? `<input type="number" min="0" max="${pend}" step="1" id="rc-${i.codigo}" data-rc="${i.codigo}" value="${esc(ui.recCant[i.codigo] ?? '')}" class="${errs[i.codigo] ? 'bad' : ''}" aria-label="Cantidad recibida de ${esc(prod.nombre)}">${errs[i.codigo] ? `<div class="note out">${errs[i.codigo]}</div>` : ''}` : '<span class="pill ok">Completo</span>'}</td></tr>`).join('')}</tbody>
+          </table></div>
+          ${ui.recConfirm && valido ? `<div class="confirm"><span>Se sumarán <b>${aRecibir.reduce((s, l) => s + Number(ui.recCant[l.i.codigo]), 0)}</b> unidades en ${aRecibir.length} producto(s) y quedará registro en el kárdex.</span><span class="spacer"></span><button class="ghost" id="rec-cancel">Volver</button><button class="primary" id="rec-ok">Confirmar entrada</button></div>`
+            : `<div class="row"><span class="note">El campo se precarga con lo pendiente; ajústelo al conteo físico.</span><span class="spacer"></span><button class="primary" id="rec-go" ${valido ? '' : 'disabled'}>Registrar entrada</button></div>`}
+        </div>`;
+    }
+    return `
+      <h1>Recepción de mercancía</h1>
+      <p class="lead">Entrada a bodega contra un pedido despachado por el proveedor. No se acepta más de lo pendiente por línea.</p>
+      ${recibibles.length > 1 ? `<div class="toolbar">${recibibles.map(r => `<button class="chip" data-rp="${r.numero}" aria-pressed="${r.numero === ui.recPedido}">${r.numero} · ${esc(nombreProv(r.proveedorNit))}</button>`).join('')}</div>` : ''}
+      ${ui.recMsg ? resultadoRecepcion() : ''}
+      ${cuerpo}`;
+  }
+
+  function resultadoRecepcion() {
+    const m = ui.recMsg;
+    if (!m.ok) return `<div class="msg err" style="margin-bottom:16px">${esc(m.error)}</div>`;
+    return `<div class="doc" style="margin-bottom:16px"><h3>Comprobante de recepción · ${m.pedido.numero}</h3>
+      <div class="note">Estado del pedido: ${ESTADOS[m.pedido.estado][0]}</div>
+      <ul>${m.movimientos.map(mv => `<li><span class="code">${mv.codigo}</span> +${mv.cantidad} → saldo ${mv.saldo}</li>`).join('')}</ul></div>`;
+  }
+
+  function selPedido(n) {
+    ui.recPedido = n; ui.recConfirm = false; ui.recCant = {};
+    const p = bd.buscarPedido(n);
+    if (p) p.items.forEach(i => { const pend = i.cantidadPedida - i.cantidadRecibida; if (pend > 0) ui.recCant[i.codigo] = String(pend); });
+  }
+
+  function totalesCarrito() {
+    const sub = ui.carrito.reduce((s, l) => { const p = bd.buscarProducto(l.codigo); return s + (p ? p.precioVenta * (Number(l.cantidad) || 0) : 0); }, 0);
+    const iva = Math.round(sub * window.SGIB.IVA);
+    return { sub, iva, total: sub + iva };
+  }
+
+  function vVentas() {
+    const q = ui.busca.trim().toLowerCase();
+    const hits = bd.productos.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)).slice(0, 12);
+    const t = totalesCarrito();
+    const errsLinea = ui.carrito.map(l => { const p = bd.buscarProducto(l.codigo); const n = Number(l.cantidad); return !(n > 0) || !Number.isInteger(n) ? 'Cantidad inválida' : n > p.stock ? `Solo hay ${p.stock}` : ''; });
+    const valido = ui.carrito.length > 0 && errsLinea.every(e => !e);
+    const m = ui.ventaMsg;
+    return `
+      <h1>Punto de venta</h1>
+      <p class="lead">Salida de bodega por venta: la mercancía solo sale con factura, y la venta se rechaza completa si una línea no tiene stock.</p>
+      ${m ? (m.ok ? `<div class="doc" style="margin-bottom:16px"><h3>Factura de venta ${m.factura.numero}</h3>
+          <div class="note">${esc(m.factura.cliente.nombre)} · ${esc(m.factura.cliente.documento)} · ${fecha(m.factura.fecha)}</div>
+          <div class="tbl"><table><tbody>${m.factura.lineas.map(l => `<tr><td>${esc(l.nombre)}</td><td class="n">${l.cantidad} × ${cop.format(l.precioUnitario)}</td><td class="n">${cop.format(l.total)}</td></tr>`).join('')}</tbody></table></div>
+          <div class="totals"><span>Subtotal</span><span class="n">${cop.format(m.factura.subtotal)}</span><span>IVA 19 %</span><span class="n">${cop.format(m.factura.iva)}</span><span class="grand">Total</span><span class="n grand">${cop.format(m.factura.total)}</span></div>
+          ${m.alertas.length ? `<div class="msg warnm" style="margin-top:12px">${m.alertas.map(esc).join('<br>')}</div>` : ''}
+        </div>` : `<div class="msg err" style="margin-bottom:16px"><b>La venta no se registró.</b><ul>${m.error.split('; ').map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`) : ''}
+      <div class="grid2">
+        <div class="panel">
+          <h2>Productos</h2>
+          <input id="pv-busca" type="search" placeholder="Código o nombre del producto" value="${esc(ui.busca)}" style="width:100%" aria-label="Buscar producto para vender">
+          <div class="hits">${hits.map(p => { const [tx, c] = estadoStock(p); return `<button class="hit" data-add="${p.codigo}" ${p.stock === 0 ? 'disabled' : ''}><span><span class="code">${p.codigo}</span> ${esc(p.nombre)}<div class="meta">${cop.format(p.precioVenta)} · stock ${p.stock}</div></span><span class="pill ${c}">${tx}</span></button>`; }).join('') || '<p class="empty">Sin coincidencias.</p>'}</div>
+        </div>
+        <div class="panel">
+          <h2>Venta actual</h2>
+          <div class="row" style="margin-bottom:12px">
+            <label class="f">Documento del cliente<input id="pv-doc" value="${esc(ui.cliDoc)}" placeholder="222222222222" inputmode="numeric"></label>
+            <label class="f">Nombre<input id="pv-nom" value="${esc(ui.cliNom)}" placeholder="Consumidor final"></label>
+          </div>
+          ${ui.carrito.length ? `<div class="tbl"><table><thead><tr><th>Producto</th><th class="n">Cant.</th><th class="n">Total</th><th></th></tr></thead><tbody>
+            ${ui.carrito.map((l, i) => { const p = bd.buscarProducto(l.codigo); return `<tr><td>${esc(p.nombre)}<div class="note">${cop.format(p.precioVenta)} c/u · stock ${p.stock}</div>${errsLinea[i] ? `<div class="note out">${errsLinea[i]}</div>` : ''}</td>
+              <td class="n"><input type="number" min="1" max="${p.stock}" step="1" id="cq-${i}" data-cq="${i}" value="${esc(l.cantidad)}" class="${errsLinea[i] ? 'bad' : ''}" style="width:72px" aria-label="Cantidad de ${esc(p.nombre)}"></td>
+              <td class="n">${cop.format(p.precioVenta * (Number(l.cantidad) || 0))}</td><td><button class="small ghost" data-quitar="${i}" aria-label="Quitar ${esc(p.nombre)}">Quitar</button></td></tr>`; }).join('')}
+          </tbody></table></div>` : '<p class="empty">Agregue productos desde la lista.</p>'}
+          <div class="totals"><span>Subtotal</span><span class="n">${cop.format(t.sub)}</span><span>IVA 19 %</span><span class="n">${cop.format(t.iva)}</span><span class="grand">Total</span><span class="n grand">${cop.format(t.total)}</span></div>
+          <div style="margin-top:14px">${ui.ventaConfirm && valido ? `<div class="confirm"><span>Facturar ${cop.format(t.total)} y descontar del stock.</span><span class="spacer"></span><button class="ghost" id="pv-cancel">Volver</button><button class="primary" id="pv-ok">Confirmar y facturar</button></div>`
+            : `<div class="row"><button class="ghost" id="pv-vaciar" ${ui.carrito.length ? '' : 'disabled'}>Vaciar</button><span class="spacer"></span><button class="primary" id="pv-go" ${valido ? '' : 'disabled'}>Facturar venta</button></div>`}</div>
+        </div>
+      </div>`;
+  }
+
+  function vKardex() {
+    const movs = [...bd.movimientos].filter(m => ui.kxProd === 'TODOS' || m.codigo === ui.kxProd).reverse();
+    return `
+      <h1>Kárdex</h1>
+      <p class="lead">Registro inalterable de cada entrada y salida, con su documento soporte y el saldo que dejó.</p>
+      <div class="panel">
+        <div class="toolbar"><label class="f" style="min-width:260px">Producto
+          <select id="kx-prod"><option value="TODOS">Todos los productos</option>${bd.productos.map(p => `<option value="${p.codigo}" ${ui.kxProd === p.codigo ? 'selected' : ''}>${p.codigo} · ${esc(p.nombre)}</option>`).join('')}</select></label></div>
+        <div class="tbl"><table>
+          <thead><tr><th class="n">#</th><th>Fecha</th><th>Tipo</th><th>Producto</th><th class="n">Cantidad</th><th>Documento</th><th class="n">Saldo</th><th>Usuario</th></tr></thead>
+          <tbody>${movs.map(m => { const p = bd.buscarProducto(m.codigo); const e = m.tipo === 'ENTRADA'; return `<tr><td class="n">${m.id}</td><td class="code">${fecha(m.fecha)}</td><td><span class="pill ${e ? 'ok' : 'out'}">${e ? 'Entrada' : 'Salida'}</span></td><td><span class="code">${m.codigo}</span> ${esc(p ? p.nombre : '')}</td><td class="n ${e ? 'in' : 'out'}">${e ? '+' : '−'}${m.cantidad}</td><td class="code">${esc(m.documento)}</td><td class="n">${m.saldo}</td><td class="code">${esc(m.usuario)}</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Sin movimientos.</td></tr>'}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  // ---------- Pruebas del camino básico (mismo conjunto que pruebas.test.js) ----------
+  const CASOS = [
+    { id: 'C1', camino: '1-2-18', desc: 'Venta sin artículos', venta: { items: [] }, ok: false, contiene: ['no tiene artículos'] },
+    { id: 'C2', camino: '1-3-4-5-10-3-11-12-18', desc: 'Producto inexistente', venta: { items: [{ codigo: 'X999', cantidad: 1 }] }, ok: false, contiene: ['X999 no existe'] },
+    { id: 'C3', camino: '1-3-4-6-7-10-3-11-12-18', desc: 'Cantidad cero', venta: { items: [{ codigo: 'A001', cantidad: 0 }] }, ok: false, contiene: ['Cantidad inválida'] },
+    { id: 'C4', camino: '1-3-4-6-8-9-10-3-11-12-18', desc: 'Stock insuficiente', venta: { items: [{ codigo: 'L001', cantidad: 31 }] }, ok: false, contiene: ['Stock insuficiente'] },
+    { id: 'C5', camino: '1-3-4-6-8-10-3-11-13-14-16-13-17-18', desc: 'Venta válida sin alerta', venta: { items: [{ codigo: 'A001', cantidad: 5 }] }, ok: true, alertas: 0, stock: { A001: 45 } },
+    { id: 'C6', camino: '1-3-4-6-8-10-3-11-13-14-15-16-13-17-18', desc: 'Venta válida con alerta de stock mínimo', venta: { items: [{ codigo: 'A002', cantidad: 3 }] }, ok: true, alertas: 1, stock: { A002: 9 } },
+    { id: 'C7', camino: '1-3-4-6-8-10-3-4-5-10-3-11-12-18', desc: 'Válido + inexistente: no se descuenta nada', venta: { items: [{ codigo: 'A001', cantidad: 2 }, { codigo: 'X999', cantidad: 1 }] }, ok: false, contiene: ['X999 no existe'], stock: { A001: 50 } },
+    { id: 'C8', camino: '1-3-4-6-7-10-3-4-6-8-9-10-3-11-12-18', desc: 'Cantidad cero + stock insuficiente', venta: { items: [{ codigo: 'A001', cantidad: 0 }, { codigo: 'A002', cantidad: 20 }] }, ok: false, contiene: ['Cantidad inválida', 'Stock insuficiente'] },
+    { id: 'C9', camino: '1-3-4-6-8-10-3-4-6-8-10-3-11-13-14-15-16-13-14-16-13-17-18', desc: 'Dos válidos: el primero queda en el mínimo', venta: { items: [{ codigo: 'A002', cantidad: 2 }, { codigo: 'L001', cantidad: 1 }] }, ok: true, alertas: 1, stock: { A002: 10, L001: 29 } }
+  ];
+  const datosPrueba = () => ({ productos: [
+    { codigo: 'A001', nombre: 'Arroz 500 g', categoriaId: 'ABA', ubicacion: 'E1-N2', costo: 2500, precioVenta: 3200, stock: 50, stockMinimo: 10 },
+    { codigo: 'A002', nombre: 'Aceite 1 L', categoriaId: 'ABA', ubicacion: 'E1-N3', costo: 9000, precioVenta: 11500, stock: 12, stockMinimo: 10 },
+    { codigo: 'L001', nombre: 'Detergente 1 kg', categoriaId: 'ASE', ubicacion: 'E3-N1', costo: 7000, precioVenta: 9800, stock: 30, stockMinimo: 5 }] });
+  function correrPruebas() {
+    return CASOS.map(c => {
+      const b = new Bodega(datosPrueba());
+      const r = b.registrarSalida(JSON.parse(JSON.stringify(c.venta)), 'tester');
+      const fallas = [];
+      if (r.ok !== c.ok) fallas.push(`ok=${r.ok}`);
+      (c.contiene || []).forEach(t => { if (!r.error || !r.error.includes(t)) fallas.push(`falta "${t}"`); });
+      if (c.alertas !== undefined && (!r.alertas || r.alertas.length !== c.alertas)) fallas.push('alertas');
+      Object.entries(c.stock || {}).forEach(([k, s]) => { if (b.buscarProducto(k).stock !== s) fallas.push(`stock ${k}`); });
+      if (!c.ok && b.movimientos.length) fallas.push('hubo movimientos');
+      return { c, r, pasa: fallas.length === 0, fallas };
+    });
+  }
+  function vPruebas() {
+    const res = ui.pruebas;
+    const pasan = res ? res.filter(x => x.pasa).length : 0;
+    return `
+      <h1>Pruebas del camino básico</h1>
+      <p class="lead">Ejecuta los 9 caminos independientes de <span class="code">registrarSalida</span> (V(G) = 9) sobre una bodega de prueba aislada; no modifica los datos de ejemplo.</p>
+      <div class="panel stack">
+        <div class="row" style="align-items:center"><button class="primary" id="pr-run">Ejecutar pruebas</button>${res ? `<span class="pill ${pasan === res.length ? 'ok' : 'out'}">${pasan}/${res.length} pasan</span>` : '<span class="note">Aún no se han ejecutado.</span>'}</div>
+        <div class="tbl"><table>
+          <thead><tr><th>Caso</th><th>Camino</th><th>Descripción</th><th>Resultado obtenido</th><th>Estado</th></tr></thead>
+          <tbody>${CASOS.map((c, i) => { const x = res && res[i]; return `<tr><td class="code">${c.id}</td><td class="code" style="white-space:normal;max-width:260px">${c.camino}</td><td>${esc(c.desc)}</td><td class="note">${x ? esc(x.r.ok ? `Factura ${x.r.factura.numero}, ${x.r.alertas.length} alerta(s)` : x.r.error) : '—'}</td><td>${x ? `<span class="pill ${x.pasa ? 'ok' : 'out'}">${x.pasa ? 'PASA' : 'FALLA'}</span>` : ''}</td></tr>`; }).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  // ---------- Router y render ----------
+  const VISTAS = { inventario: vInventario, pedidos: vPedidos, recepcion: vRecepcion, ventas: vVentas, kardex: vKardex, pruebas: vPruebas };
+  let vista = 'inventario';
+  function render(keepFocus) {
+    const act = document.activeElement; const fid = act && act.id; const pos = act && act.selectionStart;
+    $('#view').innerHTML = VISTAS[vista]();
+    document.querySelectorAll('#tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.v === vista ? 'page' : 'false'));
+    const n = bd.alertasStock().length; const b = $('#nav-alertas'); b.hidden = !n; b.textContent = n;
+    if (keepFocus && fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) {} } }
+  }
+  function ir() { const h = location.hash.slice(1); vista = VISTAS[h] ? h : 'inventario'; render(); }
+  window.addEventListener('hashchange', ir);
+
+  // ---------- Eventos ----------
+  document.addEventListener('click', e => {
+    const t = e.target.closest('button, [data-cat]'); if (!t) return;
+    const d = t.dataset;
+    if (t.id === 'btn-reset') { bd = semilla(); guardar(); Object.assign(ui, { recPedido: null, recMsg: null, ventaMsg: null, carrito: [], pedidoMsg: null, pruebas: null }); render(); return; }
+    if (d.cat) { ui.cat = d.cat; render(); return; }
+    if (d.despachar) { const r = bd.registrarDespacho(d.despachar, (ui.despachoRem[d.despachar] || '').trim() || null); if (r.ok) guardar(); render(); return; }
+    if (d.recibir) { selPedido(d.recibir); ui.recMsg = null; location.hash = 'recepcion'; return; }
+    if (t.id === 'ped-add') { ui.pedidoLineas.push({ codigo: '', cantidad: 1, costo: '' }); render(); return; }
+    if (d.quitarPl !== undefined) { ui.pedidoLineas.splice(Number(d.quitarPl), 1); render(); return; }
+    if (t.id === 'ped-crear') {
+      const lineas = ui.pedidoLineas.filter(l => l.codigo).map(l => ({ codigo: l.codigo, cantidad: Number(l.cantidad), costoUnitario: Number(l.costo) }));
+      const r = bd.crearPedido(ui.pedidoProv, lineas);
+      ui.pedidoMsg = r.ok ? { ok: true, text: `Pedido ${r.pedido.numero} creado en estado Pendiente.` } : { ok: false, text: r.error };
+      if (r.ok) { guardar(); ui.pedidoLineas = [{ codigo: '', cantidad: 1, costo: '' }]; ui.pedidoProv = ''; }
+      render(); return;
+    }
+    if (d.rp) { selPedido(d.rp); ui.recMsg = null; render(); return; }
+    if (t.id === 'rec-go') { ui.recConfirm = true; render(); return; }
+    if (t.id === 'rec-cancel') { ui.recConfirm = false; render(); return; }
+    if (t.id === 'rec-ok') {
+      const p = bd.buscarPedido(ui.recPedido);
+      const rec = p.items.filter(i => Number(ui.recCant[i.codigo]) > 0).map(i => ({ codigo: i.codigo, cantidad: Number(ui.recCant[i.codigo]) }));
+      const r = bd.registrarEntrada(ui.recPedido, rec, 'aux.bodega');
+      ui.recMsg = r; ui.recConfirm = false;
+      if (r.ok) { guardar(); if (r.pedido.estado === 'RECIBIDO_PARCIAL') selPedido(r.pedido.numero); else ui.recPedido = null; }
+      render(); return;
+    }
+    if (d.add) {
+      const l = ui.carrito.find(x => x.codigo === d.add);
+      if (l) l.cantidad = String((Number(l.cantidad) || 0) + 1); else ui.carrito.push({ codigo: d.add, cantidad: '1' });
+      ui.ventaConfirm = false; render(); return;
+    }
+    if (d.quitar !== undefined) { ui.carrito.splice(Number(d.quitar), 1); ui.ventaConfirm = false; render(); return; }
+    if (t.id === 'pv-vaciar') { ui.carrito = []; render(); return; }
+    if (t.id === 'pv-go') { ui.ventaConfirm = true; ui.ventaMsg = null; render(); return; }
+    if (t.id === 'pv-cancel') { ui.ventaConfirm = false; render(); return; }
+    if (t.id === 'pv-ok') {
+      const venta = { items: ui.carrito.map(l => ({ codigo: l.codigo, cantidad: Number(l.cantidad) })) };
+      if (ui.cliDoc.trim() || ui.cliNom.trim()) venta.cliente = { documento: ui.cliDoc.trim() || 'sin documento', nombre: ui.cliNom.trim() || 'Cliente' };
+      const r = bd.registrarSalida(venta, 'vendedor');
+      ui.ventaMsg = r; ui.ventaConfirm = false;
+      if (r.ok) { guardar(); ui.carrito = []; ui.cliDoc = ''; ui.cliNom = ''; }
+      render(); window.scrollTo({ top: 0 }); return;
+    }
+    if (t.id === 'pr-run') { ui.pruebas = correrPruebas(); render(); return; }
+  });
+
+  document.addEventListener('input', e => {
+    const t = e.target, d = t.dataset;
+    if (t.id === 'inv-q') { ui.q = t.value; render(true); }
+    else if (t.id === 'pv-busca') { ui.busca = t.value; render(true); }
+    else if (t.id === 'pv-doc') ui.cliDoc = t.value;
+    else if (t.id === 'pv-nom') ui.cliNom = t.value;
+    else if (t.id && t.id.startsWith('rem-')) ui.despachoRem[t.id.slice(4)] = t.value;
+    else if (d.pl !== undefined) { ui.pedidoLineas[Number(d.pl)][d.k] = t.value; }
+    else if (d.rc) { ui.recCant[d.rc] = t.value; ui.recConfirm = false; render(true); }
+    else if (d.cq !== undefined) { ui.carrito[Number(d.cq)].cantidad = t.value; ui.ventaConfirm = false; render(true); }
+  });
+  document.addEventListener('change', e => {
+    const t = e.target, d = t.dataset;
+    if (t.id === 'ped-prov') ui.pedidoProv = t.value;
+    else if (t.id === 'kx-prod') { ui.kxProd = t.value; render(); }
+    else if (d.pl !== undefined) { ui.pedidoLineas[Number(d.pl)][d.k] = t.value; if (d.k === 'codigo') { const p = bd.buscarProducto(t.value); if (p && !ui.pedidoLineas[Number(d.pl)].costo) ui.pedidoLineas[Number(d.pl)].costo = String(p.costo); render(); } }
+  });
+
+  ir();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "sgib-bodega-beta",
+  "version": "0.9.0",
+  "description": "Versión beta del Sistema de Gestión de Inventario y Bodega (SGIB) - metodología RUP",
+  "main": "inventario.js",
+  "scripts": {
+    "test": "node pruebas.test.js"
+  },
+  "license": "MIT"
+}
